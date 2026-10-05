@@ -42,11 +42,19 @@ Password is bcrypt-hashed. API token is auto-generated.
 
 ```json
 {
-  "max_active_downloads": 5
+  "max_active_downloads": 5,
+  "default_download_action": "strm_cdn"
 }
 ```
 
 `max_active_downloads` is the shared active-processing limit for torrent and NZB downloads. Additional imports remain queued until an active download completes.
+
+**Settings → General → Downloads → Default Download Action** offers two STRM actions:
+
+- `strm` — **Create STRM Files**: existing Decypharr WebDAV streaming URLs.
+- `strm_cdn` — **Create STRM Files CDN (TorBox)**: TorBox requestdl redirect URLs using the actual provider torrent and file IDs. Requires TorBox; unsupported providers fail clearly.
+
+The CDN action includes your TorBox API token in each STRM. Changing the action affects new acquisitions and does not rewrite existing files. Repairs that replace provider IDs do not currently regenerate imported STRMs. The default action remains `symlink`.
 
 ## Debrid Providers
 

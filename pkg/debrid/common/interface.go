@@ -30,3 +30,10 @@ type Client interface {
 	SpeedTest(ctx context.Context) types.SpeedTestResult
 	SupportsCheck() bool
 }
+
+// STRMPermalinkProvider is an optional capability for providers that can build
+// a stable redirect URL without resolving or downloading media. Only TorBox
+// currently implements it. Credentials remain inside the provider.
+type STRMPermalinkProvider interface {
+	STRMPermalink(torrentID, fileID string) (string, error)
+}

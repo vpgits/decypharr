@@ -40,6 +40,7 @@ const (
 	DownloadActionSymlink  DownloadAction = "symlink"
 	DownloadActionDownload DownloadAction = "download"
 	DownloadActionStrm     DownloadAction = "strm"
+	DownloadActionStrmCDN  DownloadAction = "strm_cdn"
 	DownloadActionNone     DownloadAction = "none"
 )
 

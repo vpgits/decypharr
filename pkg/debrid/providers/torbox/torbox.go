@@ -486,14 +486,26 @@ func (tb *Torbox) GetDownloadLink(id string, file *types.File) (types.DownloadLi
 	return tb.accountsManager.GetDownloadLink(id, file, tb.fetchDownloadLink)
 }
 
-func (tb *Torbox) fetchDownloadLink(account *account.Account, id string, file *types.File) (types.DownloadLink, error) {
-	query := url.Values{}
-	query.Set("token", account.Token)
-	query.Set("torrent_id", id)
-	query.Set("file_id", file.Id)
-	query.Set("redirect", "true")
+// STRMPermalink returns a redirect endpoint, without fetching a temporary CDN URL.
+// Use the submission API key because torrent IDs belong to that TorBox account.
+func (tb *Torbox) STRMPermalink(torrentID, fileID string) (string, error) {
+	if tb.APIKey == "" || torrentID == "" || fileID == "" {
+		return "", fmt.Errorf("TorBox STRM requires an API key, torrent ID and file ID")
+	}
+	return tb.requestDownloadURL(tb.APIKey, torrentID, fileID), nil
+}
 
-	downloadURL := fmt.Sprintf("%s/api/torrents/requestdl?%s", tb.Host, query.Encode())
+func (tb *Torbox) requestDownloadURL(token, torrentID, fileID string) string {
+	query := url.Values{}
+	query.Set("token", token)
+	query.Set("torrent_id", torrentID)
+	query.Set("file_id", fileID)
+	query.Set("redirect", "true")
+	return fmt.Sprintf("%s/api/torrents/requestdl?%s", tb.Host, query.Encode())
+}
+
+func (tb *Torbox) fetchDownloadLink(account *account.Account, id string, file *types.File) (types.DownloadLink, error) {
+	downloadURL := tb.requestDownloadURL(account.Token, id, file.Id)
 
 	now := time.Now()
 

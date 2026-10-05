@@ -16,6 +16,7 @@ import (
 	grab "github.com/cavaliergopher/grab/v3"
 	"github.com/rs/zerolog"
 	"github.com/sirrobot01/decypharr/internal/config"
+	"github.com/sirrobot01/decypharr/pkg/debrid/common"
 	"github.com/sirrobot01/decypharr/pkg/debrid/types"
 	"github.com/sirrobot01/decypharr/pkg/manager/link"
 	"github.com/sirrobot01/decypharr/pkg/notifications"
@@ -116,7 +117,7 @@ func (d *Downloader) process(entry *storage.Entry, mountPath string) error {
 		return d.processDownload(entry)
 	case config.DownloadActionSymlink:
 		return d.processSymlink(entry, mountPath)
-	case config.DownloadActionStrm:
+	case config.DownloadActionStrm, config.DownloadActionStrmCDN:
 		return d.processStrm(entry)
 	case config.DownloadActionNone:
 		d.completeEntry(entry)
@@ -663,7 +664,7 @@ func (d *Downloader) processUsenetDownload(entry *storage.Entry) error {
 	return nil
 }
 
-// processStrm creates symlinks for torrent files
+// processStrm writes stream URLs for torrent files
 func (d *Downloader) processStrm(torrent *storage.Entry) error {
 	files := torrent.GetActiveFiles()
 	d.logger.Info().Msgf("Creating .strm for %d files ...", len(files))
@@ -678,16 +679,12 @@ func (d *Downloader) processStrm(torrent *storage.Entry) error {
 
 	for _, file := range files {
 		strmFilePath := filepath.Join(torrentSymlinkPath, file.Name+".strm")
-		streamURL, err := url.JoinPath(
-			d.strmURL,
-			"webdav",
-			"stream",
-			EntryAllFolder,
-			url.PathEscape(torrent.GetFolder()),
-			url.PathEscape(file.Name),
-		)
+		streamURL, err := d.strmFileURL(torrent, file)
 		if err != nil {
-			continue
+			if torrent.Action == config.DownloadActionStrm {
+				continue // Preserve existing WebDAV URL-error behavior.
+			}
+			return err
 		}
 		if err := os.WriteFile(strmFilePath, []byte(streamURL), 0644); err != nil {
 			return fmt.Errorf("failed to create .strm file: %s: %v", strmFilePath, err)
@@ -696,6 +693,27 @@ func (d *Downloader) processStrm(torrent *storage.Entry) error {
 	d.completeEntry(torrent)
 	d.logger.Info().Str("destination", torrentSymlinkPath).Msgf("Created .strm files for %s", torrent.Name)
 	return nil
+}
+
+// strmFileURL selects only the file contents; completion stays in processStrm.
+func (d *Downloader) strmFileURL(entry *storage.Entry, file *storage.File) (string, error) {
+	switch entry.Action {
+	case config.DownloadActionStrm:
+		return url.JoinPath(d.strmURL, "webdav", "stream", EntryAllFolder,
+			url.PathEscape(entry.GetFolder()), url.PathEscape(file.Name))
+	case config.DownloadActionStrmCDN:
+		client, ok := d.manager.ProviderClient(entry.ActiveProvider).(common.STRMPermalinkProvider)
+		if !ok {
+			return "", fmt.Errorf("STRM CDN requires an active TorBox provider")
+		}
+		placement := entry.GetActiveProvider()
+		if placement == nil || placement.Files[file.Name] == nil {
+			return "", fmt.Errorf("missing TorBox STRM provider file metadata")
+		}
+		return client.STRMPermalink(placement.ID, placement.Files[file.Name].Id)
+	default:
+		return "", fmt.Errorf("unsupported STRM download action")
+	}
 }
 
 func (d *Downloader) detectMultiSeason(torrent *storage.Entry) (bool, []SeasonInfo) {
